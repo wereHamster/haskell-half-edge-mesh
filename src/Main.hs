@@ -1,15 +1,29 @@
 module Main where
 
 import Data.HalfEdgeMesh
+import qualified Data.Map as M
 import Control.Monad.State
 
-p1 = 0
-p2 = 3
-p3 = 8
+buildMesh :: State Mesh ()
+buildMesh = do
+    addFace [0,1,2]
+    addFace [1,0,3]
+    addFace [1,3,4,5]
 
 main :: IO ()
 main = do
-    let mesh = execState (addFace (p1,p2,p3)) mkMesh
-    putStrLn $ show (_meshVertices mesh)
-    let mesh1 = execState (addFace (p1,p2,9)) mesh
-    putStrLn $ show (_meshVertices mesh1)
+    let mesh = execState buildMesh emptyMesh
+
+    putStrLn "Vertices"
+    forM_ (M.elems $ _meshVertices mesh) $ \x -> do
+        putStrLn $ "  " ++ show (_vertexId x) ++ ": pos " ++ (show $ _vertexPosition x)
+
+    putStrLn ""
+    putStrLn "Edges"
+    forM_ (M.elems $ _meshEdges mesh) $ \x -> do
+        putStrLn $ "  " ++ show (_edgeId x) ++ ": vertex " ++ (show $ _edgeVertex x)
+
+    putStrLn ""
+    putStrLn "Faces"
+    forM_ (M.elems $ _meshFaces mesh) $ \x -> do
+        putStrLn $ "  " ++ show (_faceId x) ++ ": edge " ++ (show $ _faceEdge x)

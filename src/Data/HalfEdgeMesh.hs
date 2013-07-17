@@ -1,10 +1,16 @@
 module Data.HalfEdgeMesh where
 
+import System.IO.Unsafe
+
+import           Data.Maybe
 import           Data.Map (Map)
 import qualified Data.Map as M
 import qualified Data.List as L
 
 import           Control.Monad.State
+import           Control.Applicative
+
+type Position = Int
 
 data Mesh = Mesh
     { _meshIdCounter :: Int
@@ -15,7 +21,7 @@ data Mesh = Mesh
 
 data Vertex = Vertex
     { _vertexId       :: Int
-    , _vertexPosition :: Int -- FIXME
+    , _vertexPosition :: Position -- FIXME
     , _vertexEdge     :: Int
     } deriving (Show)
 
@@ -34,8 +40,8 @@ data Face = Face
     } deriving (Show)
 
 
-mkMesh :: Mesh
-mkMesh = Mesh 1 M.empty M.empty M.empty
+emptyMesh :: Mesh
+emptyMesh = Mesh 1 M.empty M.empty M.empty
 
 
 newId :: State Mesh Int
@@ -45,14 +51,14 @@ newId = do
     return $ counter
 
 
-createVertex :: Int -> State Mesh Int
+createVertex :: Position -> State Mesh Int
 createVertex position = do
     k <- newId
     let v = Vertex k position 0
     modify $ \s -> s { _meshVertices = M.insert k v (_meshVertices s) }
     return k
 
-getVertex :: Int -> State Mesh Int
+getVertex :: Position -> State Mesh Int
 getVertex position = do
     vertices <- liftM _meshVertices get
     case L.find comparingPosition (M.assocs vertices) of
@@ -66,6 +72,31 @@ modifyVertex :: (Vertex -> Vertex) -> Int -> State Mesh ()
 modifyVertex f k = do
     modify $ \s -> s { _meshVertices = M.adjust f k (_meshVertices s) }
 
+getEdge :: Int -> State Mesh Edge
+getEdge e = do
+    edges <- liftM _meshEdges get
+    maybe (bug edges) return $ M.lookup e edges
+    --return $ fromJust $ M.lookup e edges
+
+  where
+    bug edges = error $ "Can't find edge with id " ++ (show e)
+
+withEdge :: Int -> (Edge -> State Mesh ()) -> State Mesh ()
+withEdge e f = do
+    edges <- liftM _meshEdges get
+    case M.lookup e edges of
+        Nothing -> return ()
+        Just x -> f x
+
+findEdge :: Int -> Int -> State Mesh Int
+findEdge v0 v1 = do
+    edges <- liftM _meshEdges get
+    case L.find comparingVertices (M.assocs edges) of
+        Nothing -> return 0
+        Just (k,_) -> return k
+
+ where
+    comparingVertices (k,e) = (k,(_edgeNext e)) == (v0,v1)
 
 createEdge :: Int -> State Mesh Int
 createEdge v = do
@@ -78,20 +109,66 @@ modifyEdge :: (Edge -> Edge) -> Int -> State Mesh ()
 modifyEdge f k = do
     modify $ \s -> s { _meshEdges = M.adjust f k (_meshEdges s) }
 
+setNextEdge :: Int -> Int -> State Mesh ()
+setNextEdge e0 e1 = modifyEdge (\e -> e { _edgeNext = e1 }) e0
+
+setPreviousEdge :: Int -> Int -> State Mesh ()
+setPreviousEdge e0 e1 = modifyEdge (\e -> e { _edgePrev = e1 }) e0
+
+createEdges :: [Int] -> State Mesh Int
+createEdges vertices = do
+    edges <- mapM createEdge vertices
+    go (head edges) edges
+
+  where
+    go first [last] = do
+        setNextEdge last first
+        setPreviousEdge first last
+        return first
+
+    go first (e1:e2:rest) = do
+        setNextEdge e1 e2
+        setPreviousEdge e2 e1
+        go first (e2:rest)
+
+createFace :: Int -> State Mesh Int
+createFace e = do
+    k <- newId
+    let f = Face k e
+    modify $ \s -> s { _meshFaces = M.insert k f (_meshFaces s) }
+    return k
+
+getFace :: Int -> State Mesh Face
+getFace f = do
+    faces <- liftM _meshFaces get
+    maybe bug return (M.lookup f faces)
+
+  where
+    bug = error $ "Can't find face with id " ++ (show f)
+
+forEachEdge :: Int -> (Int -> State Mesh ()) -> State Mesh ()
+forEachEdge fid f = do
+    face <- getFace fid
+    go (_faceEdge face) (_faceEdge face)
+
+  where
+    go e0 e1 = do
+        f e1
+        edge <- getEdge e1
+        if (_edgeNext edge) == e0
+            then return ()
+            else go e0 (_edgeNext edge)
 
 
-addFace :: (Int, Int, Int) -> State Mesh ()
-addFace (p1,p2,p3) = do
-    v1 <- getVertex p1
-    v2 <- getVertex p2
-    v3 <- getVertex p3
 
-    e1 <- createEdge v1
-    e2 <- createEdge v2
-    e3 <- createEdge v3
+addFace :: [Position] -> State Mesh ()
+addFace positions = do
+    vertices <- mapM getVertex positions
+    firstEdge <- createEdges vertices
+    face <- createFace firstEdge
 
-    modifyVertex (\v -> v { _vertexEdge = e1 }) v1
-    modifyVertex (\v -> v { _vertexEdge = e2 }) v2
-    modifyVertex (\v -> v { _vertexEdge = e3 }) v3
-
-    return ()
+    -- Update twins for all edges.
+    forEachEdge face $ \e -> do
+        edge <- getEdge e
+        twin <- findEdge (_edgeNext edge) e
+        modifyEdge (\x -> x { _edgeTwin = twin }) e
