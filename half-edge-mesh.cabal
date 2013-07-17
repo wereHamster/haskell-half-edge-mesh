@@ -1,0 +1,16 @@
+name:                haskell-half-edge-mesh
+version:             0.1.0.0
+license-file:        UNLICENSE
+category:            Data
+build-type:          Simple
+cabal-version:       >= 1.8
+
+
+library
+    hs-source-dirs:    src
+
+    exposed-modules:   Data.HalfEdgeMesh
+
+    build-depends:     base
+    build-depends:     containers
+    build-depends:     mtl
