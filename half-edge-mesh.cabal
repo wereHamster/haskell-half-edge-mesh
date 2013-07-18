@@ -1,4 +1,4 @@
-name:                haskell-half-edge-mesh
+name:                half-edge-mesh
 version:             0.1.0.0
 license-file:        UNLICENSE
 category:            Data
@@ -14,3 +14,14 @@ library
     build-depends:     base
     build-depends:     containers
     build-depends:     mtl
+
+Test-Suite tests
+    hs-source-dirs:    tests
+
+    type:              exitcode-stdio-1.0
+
+    main-is:           Tests.hs
+
+    build-depends:     base
+    build-depends:     half-edge-mesh
+    build-depends:     hspec

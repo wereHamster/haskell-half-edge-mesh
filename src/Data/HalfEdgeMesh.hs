@@ -172,3 +172,16 @@ addFace positions = do
         edge <- getEdge e
         twin <- findEdge (_edgeNext edge) e
         modifyEdge (\x -> x { _edgeTwin = twin }) e
+
+
+buildMesh :: State Mesh a -> Mesh
+buildMesh f = execState f emptyMesh
+
+numVertices :: Mesh -> Int
+numVertices = M.size . _meshVertices
+
+numEdges :: Mesh -> Int
+numEdges = M.size . _meshEdges
+
+numFaces :: Mesh -> Int
+numFaces = M.size . _meshFaces
