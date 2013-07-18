@@ -30,4 +30,4 @@ spec = do
             addFace [0,1,2]
             addFace [0,2,3]
 
-        checkSize mesh (4,4,2)
+        checkSize mesh (4,6,2)
